@@ -1,0 +1,53 @@
+{
+  "name": "pi-kimi-provider",
+  "version": "0.1.0",
+  "description": "pi extension that connects the Kimi Code plan as a self-contained `kimi` provider (OpenAI Responses API) with /kimi-usage and /kimi-refresh",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "kimi",
+    "provider",
+    "usage",
+    "quota"
+  ],
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "src/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "npm run typecheck && npm run test:unit && node tests/test-pi-local.mjs",
+    "test:unit": "tsx tests/test-package-manifest.ts && tsx tests/test-credentials.ts && tsx tests/test-models.ts && tsx tests/test-usage.ts && tsx tests/test-render.ts && tsx tests/test-oauth.ts",
+    "typecheck": "tsc --noEmit",
+    "format:check": "prettier --check '**/*.{ts,mjs,json,md}'",
+    "format": "prettier --write '**/*.{ts,mjs,json,md}'",
+    "test:pi-local": "node tests/test-pi-local.mjs"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "prettier": "^3.9.8",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
