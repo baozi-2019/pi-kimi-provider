@@ -58,12 +58,12 @@ const IMAGE_INPUT_LIMITS = {
 } as const
 
 /**
- * Kimi accepts low/high/max (default: max for the K3.1 family and K2.8
- * Preview, high for the K3 family). K3.1 Pro rejects disabled thinking with
- * HTTP 400, so `off` (and the pi-only levels) map to null = unsupported.
+ * K3 / K2.8 accept low/high/max and also accept off=none (the documented
+ * fallback to K2.8 without thinking). K3.1 Pro rejects off with HTTP 400.
+ * Pi-only medium/xhigh levels stay hidden rather than being silently remapped.
  */
 const ADJUSTABLE_THINKING = {
-  off: null,
+  off: "none",
   minimal: null,
   low: "low",
   medium: null,
@@ -72,8 +72,7 @@ const ADJUSTABLE_THINKING = {
   max: "max",
 } as const
 
-/** K2.7 Code Highspeed: thinking fixed ON, effort not adjustable. */
-const FIXED_THINKING = { off: null } as const
+const FORCED_THINKING = { ...ADJUSTABLE_THINKING, off: null } as const
 
 function chatModel(
   id: string,
@@ -81,12 +80,13 @@ function chatModel(
   contextWindow: number,
   maxTokens: number,
   thinkingLevelMap: KimiModelConfig["thinkingLevelMap"],
+  reasoning = true,
 ): KimiModelConfig {
   return {
     type: "chat",
     id,
     name,
-    reasoning: true,
+    reasoning,
     thinkingLevelMap,
     input: ["text", "image"],
     inputLimits: IMAGE_INPUT_LIMITS,
@@ -98,18 +98,25 @@ function chatModel(
 }
 
 export const STATIC_KIMI_MODELS: KimiModelConfig[] = [
-  chatModel("k3.1-pro", "Kimi K3.1 Pro", 1_048_576, 131_072, { ...ADJUSTABLE_THINKING }),
+  chatModel("k3.1-pro", "Kimi K3.1 Pro", 1_048_576, 131_072, { ...FORCED_THINKING }),
   chatModel("k3.1-pro-highspeed", "Kimi K3.1 Pro Highspeed", 1_048_576, 131_072, {
-    ...ADJUSTABLE_THINKING,
+    ...FORCED_THINKING,
   }),
   chatModel("k3", "Kimi K3", 1_048_576, 131_072, { ...ADJUSTABLE_THINKING }),
   chatModel("k3-256k", "Kimi K3-256K", 262_144, 131_072, { ...ADJUSTABLE_THINKING }),
   chatModel("kimi-for-coding", "Kimi For Coding (K2.8 Preview)", 1_048_576, 32_768, {
     ...ADJUSTABLE_THINKING,
   }),
-  chatModel("kimi-for-coding-highspeed", "Kimi For Coding Highspeed (K2.7)", 262_144, 32_768, {
-    ...FIXED_THINKING,
-  }),
+  // reasoning=false suppresses pi's effort selector and reasoning request
+  // field; K2.7 Highspeed itself remains Thinking:ON by upstream default.
+  chatModel(
+    "kimi-for-coding-highspeed",
+    "Kimi For Coding Highspeed (K2.7)",
+    262_144,
+    32_768,
+    undefined,
+    false,
+  ),
 ]
 
 const STATIC_BY_ID = new Map(STATIC_KIMI_MODELS.map((model) => [model.id, model]))
@@ -162,17 +169,21 @@ export async function fetchRemoteModelIds(options: {
   baseUrl: string
   fetchImpl?: typeof fetch
   timeoutMs?: number
+  signal?: AbortSignal
 }): Promise<FetchModelsResult> {
   const fetchImpl = options.fetchImpl ?? fetch
   const timeoutMs = options.timeoutMs ?? KIMI_MODELS_TIMEOUT_MS
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const requestSignal = options.signal
+    ? AbortSignal.any([controller.signal, options.signal])
+    : controller.signal
   const url = `${options.baseUrl.replace(/\/+$/, "")}/models`
   try {
     const response = await fetchImpl(url, {
       method: "GET",
       headers: { accept: "application/json", authorization: `Bearer ${options.apiKey}` },
-      signal: controller.signal,
+      signal: requestSignal,
     })
     if (!response.ok) {
       return { ok: false, message: `HTTP ${response.status}` }
@@ -181,11 +192,13 @@ export async function fetchRemoteModelIds(options: {
     if (!ids) return { ok: false, message: "unreadable model list" }
     return { ok: true, ids }
   } catch (error) {
-    const reason = controller.signal.aborted
-      ? `timed out after ${timeoutMs}ms`
-      : error instanceof Error
-        ? error.message
-        : String(error)
+    const reason = options.signal?.aborted
+      ? "model refresh aborted"
+      : controller.signal.aborted
+        ? `timed out after ${timeoutMs}ms`
+        : error instanceof Error
+          ? error.message
+          : String(error)
     // Never leak the key through error text.
     return { ok: false, message: reason.split(options.apiKey).join("[redacted]") }
   } finally {
@@ -238,6 +251,7 @@ export async function refreshKimiModels(
     lastRefresh = { at: Date.now(), source: "offline", modelIds: staticIds }
     return STATIC_KIMI_MODELS
   }
+  if (context.signal.aborted) return STATIC_KIMI_MODELS
 
   const apiKey = credentialKey(context.credential) ?? getKimiApiKey()
   if (!apiKey) {
@@ -251,7 +265,10 @@ export async function refreshKimiModels(
   }
 
   const baseUrl = context.baseUrl ?? `${apiRoot()}${KIMI_CHAT_BASE_PATH}`
-  const result = await fetchRemoteModelIds({ apiKey, baseUrl })
+  const result = await fetchRemoteModelIds({ apiKey, baseUrl, signal: context.signal })
+  // pi may abort a stale/background refresh. Its result must not overwrite
+  // the report from a newer or explicitly requested refresh.
+  if (context.signal.aborted) return STATIC_KIMI_MODELS
   if (!result.ok) {
     lastRefresh = {
       at: Date.now(),

@@ -67,7 +67,9 @@ if (piCheck.error) {
 let scenario = "full"
 let usageRequestCount = 0
 let modelsRequestCount = 0
+let chatRequestCount = 0
 let lastAuthorization = ""
+let lastChatPayload
 
 const FULL_RESPONSE = {
   usage: { limit: "100", used: "12", remaining: "88", resetTime: "2026-09-26T05:22:45Z" },
@@ -105,6 +107,16 @@ const server = createServer((req, res) => {
     }
     res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" })
     res.end(JSON.stringify(scenario === "no7d" ? NO_7D_RESPONSE : FULL_RESPONSE))
+    return
+  }
+  if (req.method === "POST" && pathname === "/coding/v1/responses") {
+    chatRequestCount += 1
+    let body = ""
+    req.on("data", (chunk) => (body += chunk))
+    req.on("end", () => {
+      lastChatPayload = JSON.parse(body)
+    })
+    // Keep the model response pending until the test aborts the agent run.
     return
   }
   if (req.method === "GET" && pathname === "/coding/v1/models") {
@@ -216,6 +228,7 @@ function startRpcSession(timeoutMs = 30_000) {
     waitFor,
     runCommand,
     stderr: () => stderr,
+    eventCount: () => events.length,
     close: () => child.kill(),
   }
 }
@@ -225,6 +238,14 @@ const isNotify = (text) => (event) =>
   event.method === "notify" &&
   typeof event.message === "string" &&
   event.message.includes(text)
+
+async function waitForCondition(predicate, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for the mock server state")
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+}
 
 try {
   // -- Session 1: full fixture, command registration, throttle -------------
@@ -277,8 +298,19 @@ try {
   assert.match(refreshed.message, /refreshed from server/)
   assert.match(refreshed.message, /brand-new-model/)
   assert.match(refreshed.message, /added: brand-new-model/)
-  assert.match(refreshed.message, /k3, k3-256k/)
+  assert.match(refreshed.message, /removed: .*k3/)
   assert.ok(modelsRequestCount >= 1)
+  first.send({ id: "models-after-refresh", type: "get_available_models" })
+  const refreshedModelsResponse = await first.waitFor(
+    (event) => event.type === "response" && event.id === "models-after-refresh",
+  )
+  const refreshedKimiModels = (refreshedModelsResponse.data?.models ?? []).filter(
+    (m) => m.provider === "kimi",
+  )
+  assert.deepEqual(
+    refreshedKimiModels.map((m) => m.id),
+    ["k3.1-pro", "kimi-for-coding", "brand-new-model"],
+  )
   first.close()
 
   // -- Session 2: new-plan fixture without limit_7d -------------------------
@@ -304,12 +336,59 @@ try {
   assert.match(unauthorized.message, /rejected the API key/i)
   third.close()
 
+  // -- Session 4: query while the main agent request is still pending --------
+  console.log("[pi-local] /kimi-usage runs while the main agent is busy")
+  scenario = "full"
+  const fourth = startRpcSession()
+  fourth.send({
+    id: "set-fixed-thinking-model",
+    type: "set_model",
+    provider: "kimi",
+    modelId: "kimi-for-coding-highspeed",
+  })
+  const modelSet = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "set-fixed-thinking-model",
+  )
+  assert.equal(modelSet.success, true)
+
+  fourth.send({ id: "fixed-thinking-levels", type: "get_available_thinking_levels" })
+  const fixedThinkingLevels = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "fixed-thinking-levels",
+  )
+  assert.deepEqual(fixedThinkingLevels.data?.levels, ["off"])
+
+  const previousChatRequestCount = chatRequestCount
+  fourth.send({ id: "busy-prompt", type: "prompt", message: "hold the response open" })
+  const busyPrompt = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "busy-prompt",
+  )
+  assert.equal(busyPrompt.success, true)
+  await waitForCondition(
+    () => chatRequestCount === previousChatRequestCount + 1 && lastChatPayload !== undefined,
+  )
+  assert.equal(lastChatPayload.reasoning, undefined)
+
+  usageRequestCount = 0
+  const duringBusyRun = await fourth.runCommand("usage-busy", "/kimi-usage")
+  assert.match(duringBusyRun.message, /5-hour █+░+ 32% used/)
+  assert.equal(usageRequestCount, 1)
+  assert.equal(chatRequestCount, previousChatRequestCount + 1)
+
+  const abortEventIndex = fourth.eventCount()
+  fourth.send({ id: "abort-busy", type: "abort" })
+  await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "abort-busy" && event.success,
+  )
+  await fourth.waitFor((event) => event.type === "agent_settled", abortEventIndex)
+  fourth.close()
+
   // -- No credential leaks anywhere ------------------------------------------
-  const combined = [first, second, third].map((session) => session.stderr()).join("\n")
+  const combined = [first, second, third, fourth].map((session) => session.stderr()).join("\n")
   assert.doesNotMatch(combined, new RegExp(FAKE_KEY))
 
   console.log("[pi-local] PASS")
 } finally {
+  server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
   rmSync(tempHome, { recursive: true, force: true })
 }

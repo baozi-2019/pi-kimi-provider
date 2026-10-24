@@ -9,12 +9,11 @@
  * - `/kimi-refresh` re-fetches the model list (undocumented GET /models),
  *   falling back to the built-in static catalog.
  *
- * Rendering: TUI sessions get a custom message with a registered renderer;
- * any other mode degrades to plain text (notify in RPC, stdout in print).
+ * Rendering: interactive and RPC sessions get non-blocking notifications;
+ * print/json modes degrade to stdout/stderr.
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
-import { Text } from "@earendil-works/pi-tui"
 
 import { apiRoot, getKimiApiKey, KIMI_API_KEY_ENV, KIMI_PROVIDER } from "./src/credentials.ts"
 import {
@@ -27,20 +26,12 @@ import { loginWithDeviceCode, refreshOAuthToken } from "./src/oauth.ts"
 import { parseKimiUsageResponse, renderUsageText } from "./src/render.ts"
 import { createUsageThrottle, fetchKimiUsage } from "./src/usage.ts"
 
-const MESSAGE_TYPE = "kimi-usage"
-
 type EmitKind = "info" | "warning" | "error"
 
-/** TUI info output becomes a persistent card; everything else degrades. */
-function makeEmit(
-  pi: ExtensionAPI,
-  ctx: ExtensionCommandContext,
-): (text: string, kind: EmitKind) => void {
-  const tui = ctx.mode === "tui" && ctx.hasUI
+/** Immediate UI feedback must not enter the active agent's steering queue. */
+function makeEmit(ctx: ExtensionCommandContext): (text: string, kind: EmitKind) => void {
   return (text, kind) => {
-    if (tui && kind === "info") {
-      pi.sendMessage({ customType: MESSAGE_TYPE, content: text, display: true })
-    } else if (ctx.hasUI) {
+    if (ctx.hasUI) {
       ctx.ui.notify(text, kind)
     } else if (kind === "error" || ctx.mode !== "print") {
       // JSON mode: stdout is the machine-readable event stream, so even
@@ -68,12 +59,6 @@ function requireApiKey(emit: (text: string, kind: EmitKind) => void): string | u
 export default function (pi: ExtensionAPI) {
   const usageThrottle = createUsageThrottle()
   const refreshThrottle = createUsageThrottle()
-
-  pi.registerMessageRenderer(MESSAGE_TYPE, (message, options, _theme) => {
-    const text =
-      typeof message.content === "string" ? message.content : JSON.stringify(message.content)
-    return new Text(text, options.outputPad, 0)
-  })
 
   // -------------------------------------------------------------------------
   // Provider `kimi`: OpenAI Responses API + API key / OAuth device-code login
@@ -124,8 +109,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("kimi-usage", {
     description: "Show Kimi Coding plan usage (5-hour and 7-day limits)",
     handler: async (_args, ctx) => {
-      await ctx.waitForIdle?.()
-      const emit = makeEmit(pi, ctx)
+      // Usage is independent of the active agent run. Do not wait for idle:
+      // pi executes extension commands immediately even while streaming.
+      const emit = makeEmit(ctx)
 
       const apiKey = requireApiKey(emit)
       if (!apiKey) return
@@ -156,7 +142,7 @@ export default function (pi: ExtensionAPI) {
     description: "Refresh the kimi provider model list (online, static catalog fallback)",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle?.()
-      const emit = makeEmit(pi, ctx)
+      const emit = makeEmit(ctx)
 
       const apiKey = requireApiKey(emit)
       if (!apiKey) return
@@ -204,8 +190,7 @@ export default function (pi: ExtensionAPI) {
       const removed = before.filter((id) => !state.modelIds.includes(id))
       const parts = [`Kimi models refreshed from server: ${state.modelIds.join(", ")}`]
       if (added.length > 0) parts.push(`added: ${added.join(", ")}`)
-      if (removed.length > 0)
-        parts.push(`not on server (kept from static catalog): ${removed.join(", ")}`)
+      if (removed.length > 0) parts.push(`removed: ${removed.join(", ")}`)
       emit(parts.join("\n"), "info")
     },
   })

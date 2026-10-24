@@ -21,7 +21,7 @@
   ],
   "scripts": {
     "test": "npm run typecheck && npm run test:unit && node tests/test-pi-local.mjs",
-    "test:unit": "tsx tests/test-package-manifest.ts && tsx tests/test-credentials.ts && tsx tests/test-models.ts && tsx tests/test-usage.ts && tsx tests/test-render.ts && tsx tests/test-oauth.ts",
+    "test:unit": "tsx tests/test-package-manifest.ts && tsx tests/test-credentials.ts && tsx tests/test-command.ts && tsx tests/test-models.ts && tsx tests/test-usage.ts && tsx tests/test-render.ts && tsx tests/test-oauth.ts",
     "typecheck": "tsc --noEmit",
     "format:check": "prettier --check '**/*.{ts,mjs,json,md}'",
     "format": "prettier --write '**/*.{ts,mjs,json,md}'",

@@ -4,7 +4,7 @@
  */
 
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, it } from "node:test"
@@ -42,9 +42,18 @@ describe("static catalog", () => {
     assert.equal(model?.thinkingLevelMap?.max, "max")
   })
 
-  it("kimi-for-coding-highspeed has fixed thinking (no adjustable effort)", () => {
+  it("allows the documented off fallback for K3 and K2.8", () => {
+    for (const id of ["k3", "k3-256k", "kimi-for-coding"]) {
+      const model = STATIC_KIMI_MODELS.find((entry) => entry.id === id)
+      assert.equal(model?.thinkingLevelMap?.off, "none", id)
+    }
+  })
+
+  it("kimi-for-coding-highspeed leaves fixed thinking to upstream", () => {
     const model = STATIC_KIMI_MODELS.find((entry) => entry.id === "kimi-for-coding-highspeed")
-    assert.deepEqual(model?.thinkingLevelMap, { off: null })
+    // pi must not expose/send an adjustable effort; upstream keeps Thinking:ON.
+    assert.equal(model?.reasoning, false)
+    assert.equal(model?.thinkingLevelMap, undefined)
   })
 
   it("never fabricates per-token costs (subscription quota)", () => {
@@ -151,18 +160,44 @@ describe("fetchRemoteModelIds", () => {
     if (result.ok) return
     assert.doesNotMatch(result.message, new RegExp(key))
   })
+
+  it("honors caller cancellation separately from the timeout", async () => {
+    const controller = new AbortController()
+    const fetchImpl = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true })
+      })
+    const pending = fetchRemoteModelIds({
+      apiKey: key,
+      baseUrl: "https://api.kimi.com/coding/v1",
+      fetchImpl,
+      signal: controller.signal,
+    })
+    controller.abort()
+    const result = await pending
+    assert.deepEqual(result, { ok: false, message: "model refresh aborted" })
+  })
 })
 
 describe("refreshKimiModels", () => {
   let dir: string
+  let savedAgentDir: string | undefined
+  let savedApiKey: string | undefined
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), "pi-kimi-provider-models-"))
+    savedAgentDir = process.env.PI_CODING_AGENT_DIR
+    savedApiKey = process.env.KIMI_API_KEY
+    process.env.PI_CODING_AGENT_DIR = dir
+    delete process.env.KIMI_API_KEY
   })
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true })
-    delete process.env.KIMI_API_KEY
+    if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR
+    else process.env.PI_CODING_AGENT_DIR = savedAgentDir
+    if (savedApiKey === undefined) delete process.env.KIMI_API_KEY
+    else process.env.KIMI_API_KEY = savedApiKey
   })
 
   it("returns the static catalog without network access", async () => {
@@ -277,6 +312,42 @@ describe("refreshKimiModels", () => {
       assert.equal(seenUrl, "/coding/v1/models")
     } finally {
       delete process.env.KIMI_API_KEY
+      await new Promise((resolve) => server.close(resolve))
+    }
+  })
+
+  it("does not overwrite the last refresh state after caller cancellation", async () => {
+    const { createServer } = await import("node:http")
+    let markRequestSeen: (() => void) | undefined
+    const requestSeen = new Promise<void>((resolve) => {
+      markRequestSeen = resolve
+    })
+    const server = createServer((req, res) => {
+      markRequestSeen?.()
+      req.on("close", () => res.end())
+    })
+    await new Promise<void>((resolve) => server.listen(0, resolve))
+    const address = server.address()
+    const port = typeof address === "object" && address ? address.port : 0
+    const before = getLastModelsRefresh()
+    const controller = new AbortController()
+    try {
+      const pending = refreshKimiModels({
+        allowNetwork: true,
+        baseUrl: `http://127.0.0.1:${port}/coding/v1`,
+        credential: { type: "api_key", key: "sk-kimi-fake-test-key" },
+        signal: controller.signal,
+      })
+      await requestSeen
+      controller.abort()
+      const models = await pending
+      assert.deepEqual(
+        models.map((model) => model.id),
+        STATIC_KIMI_MODELS.map((model) => model.id),
+      )
+      assert.equal(getLastModelsRefresh(), before)
+    } finally {
+      controller.abort()
       await new Promise((resolve) => server.close(resolve))
     }
   })

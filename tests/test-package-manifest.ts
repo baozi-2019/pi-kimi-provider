@@ -41,6 +41,8 @@ describe("package manifest", () => {
     for (const file of ["index.ts", "src/", "README.md", "LICENSE"]) {
       assert.ok(manifest.files?.includes(file), `files must include ${file}`)
     }
+    const license = await readFile(new URL("../LICENSE", import.meta.url), "utf-8")
+    assert.match(license, /^MIT License/)
   })
 
   it("has no runtime dependencies (host provides everything)", async () => {
