@@ -58,12 +58,12 @@ const IMAGE_INPUT_LIMITS = {
 } as const
 
 /**
- * K3 / K2.8 accept low/high/max and also accept off=off (the documented
- * fallback to K2.8 without thinking). K3.1 Pro rejects off with HTTP 400.
- * Pi-only medium/xhigh levels stay hidden rather than being silently remapped.
+ * K3 / K2.8 accept low/high/max. The live Kimi Responses endpoint rejects
+ * both off and none, so off is hidden just like on the reasoning-only K3.1
+ * family. Pi-only medium/xhigh levels stay hidden as well.
  */
 const ADJUSTABLE_THINKING = {
-  off: "off",
+  off: null,
   minimal: null,
   low: "low",
   medium: null,
@@ -71,8 +71,6 @@ const ADJUSTABLE_THINKING = {
   xhigh: null,
   max: "max",
 } as const
-
-const FORCED_THINKING = { ...ADJUSTABLE_THINKING, off: null } as const
 
 function chatModel(
   id: string,
@@ -98,9 +96,9 @@ function chatModel(
 }
 
 export const STATIC_KIMI_MODELS: KimiModelConfig[] = [
-  chatModel("k3.1-pro", "Kimi K3.1 Pro", 1_048_576, 131_072, { ...FORCED_THINKING }),
+  chatModel("k3.1-pro", "Kimi K3.1 Pro", 1_048_576, 131_072, { ...ADJUSTABLE_THINKING }),
   chatModel("k3.1-pro-highspeed", "Kimi K3.1 Pro Highspeed", 1_048_576, 131_072, {
-    ...FORCED_THINKING,
+    ...ADJUSTABLE_THINKING,
   }),
   chatModel("k3", "Kimi K3", 1_048_576, 131_072, { ...ADJUSTABLE_THINKING }),
   chatModel("k3-256k", "Kimi K3-256K", 262_144, 131_072, { ...ADJUSTABLE_THINKING }),

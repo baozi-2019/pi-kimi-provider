@@ -42,10 +42,10 @@ describe("static catalog", () => {
     assert.equal(model?.thinkingLevelMap?.max, "max")
   })
 
-  it("allows the documented off fallback for K3 and K2.8", () => {
+  it("disables off for K3 and K2.8 because Responses rejects it", () => {
     for (const id of ["k3", "k3-256k", "kimi-for-coding"]) {
       const model = STATIC_KIMI_MODELS.find((entry) => entry.id === id)
-      assert.equal(model?.thinkingLevelMap?.off, "off", id)
+      assert.equal(model?.thinkingLevelMap?.off, null, id)
     }
   })
 

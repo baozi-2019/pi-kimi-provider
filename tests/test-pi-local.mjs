@@ -381,7 +381,7 @@ try {
   )
   await fourth.waitFor((event) => event.type === "agent_settled", abortEventIndex)
 
-  console.log("[pi-local] K2.8 think:off sends the Kimi-supported off effort")
+  console.log("[pi-local] K2.8 clamps unsupported off before sending")
   fourth.send({
     id: "set-adjustable-model",
     type: "set_model",
@@ -392,6 +392,12 @@ try {
     (event) => event.type === "response" && event.id === "set-adjustable-model",
   )
   assert.equal(adjustableModelSet.success, true)
+  fourth.send({ id: "adjustable-thinking-levels", type: "get_available_thinking_levels" })
+  const adjustableThinkingLevels = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "adjustable-thinking-levels",
+  )
+  assert.deepEqual(adjustableThinkingLevels.data?.levels, ["low", "high", "max"])
+
   fourth.send({ id: "set-thinking-off", type: "set_thinking_level", level: "off" })
   const thinkingOffSet = await fourth.waitFor(
     (event) => event.type === "response" && event.id === "set-thinking-off",
@@ -408,7 +414,10 @@ try {
   await waitForCondition(
     () => chatRequestCount === previousOffRequestCount + 1 && lastChatPayload !== undefined,
   )
-  assert.equal(lastChatPayload.reasoning?.effort, "off")
+  assert.ok(
+    ["low", "high", "max"].includes(lastChatPayload.reasoning?.effort),
+    `unexpected reasoning effort: ${JSON.stringify(lastChatPayload.reasoning)}`,
+  )
 
   const abortOffEventIndex = fourth.eventCount()
   fourth.send({ id: "abort-off", type: "abort" })

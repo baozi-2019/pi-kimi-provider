@@ -29,14 +29,14 @@ pi remove git:github.com/baozi-2019/pi-kimi-provider
 | --------------------------- | ------------------- | ------ | ---------------------------------- |
 | `k3.1-pro`                  | K3.1 Pro            | 1M     | 强制开启，low/high/max（默认 max） |
 | `k3.1-pro-highspeed`        | K3.1 Pro Highspeed  | 1M     | 同上，输出约 2–3 倍速              |
-| `k3`                        | K3                  | 1M     | off/low/high/max（上游默认 high）  |
+| `k3`                        | K3                  | 1M     | low/high/max（上游默认 high）      |
 | `k3-256k`                   | K3（256K 版）       | 256K   | 同上                               |
-| `kimi-for-coding`           | K2.8 Preview        | 1M     | off/low/high/max（上游默认 max）   |
+| `kimi-for-coding`           | K2.8 Preview        | 1M     | low/high/max（上游默认 max）       |
 | `kimi-for-coding-highspeed` | K2.7 Code Highspeed | 256K   | 固定开启，不可调档                 |
 
 套餐不覆盖的模型或上下文会被上游拒绝（403），可用模型以你的会员档位为准（见[会员权益](https://www.kimi.com/code/docs/kimi-code/membership.html)）。
 
-**思考档位**：K3.1 Pro 系列仅支持 low/high/max，关闭思考会被上游拒绝（HTTP 400），因此 off 不在选择器中；K3 系列与 K2.8 的 off 按官方规则路由到 K2.8 无思考版。K2.7 Highspeed 不在 pi 中暴露 effort 档位，也不发送该字段，由上游保持固定 Thinking:ON。表中的“上游默认”指未传 effort 时的服务端默认值；pi 会发送当前实际选中的档位。
+**思考档位**：K3.1 Pro 系列仅支持 low/high/max，关闭思考会被上游拒绝（HTTP 400）；K3 系列与 K2.8 也不提供 off，因为当前 Responses 上游实测同样拒绝 `off` 和 `none`，pi 会把旧的 off 设置钳制到受支持档位。K2.7 Highspeed 不暴露 effort 档位，也不发送该字段，由上游保持固定 Thinking:ON。表中的“上游默认”指未传 effort 时的服务端默认值；pi 会发送当前实际选中的档位。
 
 **图片输入**：Responses 协议支持文本与图片输入（视频暂不支持，即使模型本身支持）。
 
