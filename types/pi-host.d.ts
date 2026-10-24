@@ -120,6 +120,15 @@ declare module "@earendil-works/pi-coding-agent" {
         theme: unknown,
       ) => unknown,
     ): void
+    registerEntryRenderer<T>(
+      customType: string,
+      renderer: (
+        entry: { data?: T },
+        options: { expanded: boolean },
+        theme: { bg(color: string, text: string): string },
+      ) => unknown,
+    ): void
+    appendEntry<T>(customType: string, data?: T): void
     registerCommand(
       name: string,
       options: {
@@ -133,6 +142,11 @@ declare module "@earendil-works/pi-coding-agent" {
 }
 
 declare module "@earendil-works/pi-tui" {
+  export class Box {
+    constructor(paddingX?: number, paddingY?: number, bgFn?: (text: string) => string)
+    addChild(child: unknown): void
+  }
+
   export class Text {
     constructor(text: string, outputPad?: number, paddingLeft?: number)
   }

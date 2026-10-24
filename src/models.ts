@@ -58,12 +58,12 @@ const IMAGE_INPUT_LIMITS = {
 } as const
 
 /**
- * K3 / K2.8 accept low/high/max and also accept off=none (the documented
+ * K3 / K2.8 accept low/high/max and also accept off=off (the documented
  * fallback to K2.8 without thinking). K3.1 Pro rejects off with HTTP 400.
  * Pi-only medium/xhigh levels stay hidden rather than being silently remapped.
  */
 const ADJUSTABLE_THINKING = {
-  off: "none",
+  off: "off",
   minimal: null,
   low: "low",
   medium: null,

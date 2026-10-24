@@ -9,13 +9,15 @@
  * - `/kimi-refresh` re-fetches the model list (undocumented GET /models),
  *   falling back to the built-in static catalog.
  *
- * Rendering: interactive and RPC sessions get non-blocking notifications;
- * print/json modes degrade to stdout/stderr.
+ * Rendering: TUI usage results use immediately rendered custom entries with a
+ * themed background; RPC uses notifications and print/json use stdout/stderr.
  */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import { Box, Text } from "@earendil-works/pi-tui"
 
 import { apiRoot, getKimiApiKey, KIMI_API_KEY_ENV, KIMI_PROVIDER } from "./src/credentials.ts"
+import { KIMI_USAGE_ENTRY, type EmitKind, makeEmit } from "./src/emit.ts"
 import {
   getLastModelsRefresh,
   KIMI_CHAT_BASE_PATH,
@@ -25,25 +27,6 @@ import {
 import { loginWithDeviceCode, refreshOAuthToken } from "./src/oauth.ts"
 import { parseKimiUsageResponse, renderUsageText } from "./src/render.ts"
 import { createUsageThrottle, fetchKimiUsage } from "./src/usage.ts"
-
-type EmitKind = "info" | "warning" | "error"
-
-/** Immediate UI feedback must not enter the active agent's steering queue. */
-function makeEmit(ctx: ExtensionCommandContext): (text: string, kind: EmitKind) => void {
-  return (text, kind) => {
-    if (ctx.hasUI) {
-      ctx.ui.notify(text, kind)
-    } else if (kind === "error" || ctx.mode !== "print") {
-      // JSON mode: stdout is the machine-readable event stream, so even
-      // info output must go to stderr.
-      // pi-lens-ignore: no-console-except-error
-      console.error(text)
-    } else {
-      // pi-lens-ignore: no-console-except-error
-      console.log(text)
-    }
-  }
-}
 
 function requireApiKey(emit: (text: string, kind: EmitKind) => void): string | undefined {
   const apiKey = getKimiApiKey()
@@ -59,6 +42,12 @@ function requireApiKey(emit: (text: string, kind: EmitKind) => void): string | u
 export default function (pi: ExtensionAPI) {
   const usageThrottle = createUsageThrottle()
   const refreshThrottle = createUsageThrottle()
+
+  pi.registerEntryRenderer<{ text: string }>(KIMI_USAGE_ENTRY, (entry, _options, theme) => {
+    const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text))
+    box.addChild(new Text(entry.data?.text ?? "Kimi usage unavailable", 0, 0))
+    return box
+  })
 
   // -------------------------------------------------------------------------
   // Provider `kimi`: OpenAI Responses API + API key / OAuth device-code login
@@ -111,7 +100,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       // Usage is independent of the active agent run. Do not wait for idle:
       // pi executes extension commands immediately even while streaming.
-      const emit = makeEmit(ctx)
+      const emit = makeEmit(pi, ctx, KIMI_USAGE_ENTRY)
 
       const apiKey = requireApiKey(emit)
       if (!apiKey) return
@@ -142,7 +131,7 @@ export default function (pi: ExtensionAPI) {
     description: "Refresh the kimi provider model list (online, static catalog fallback)",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle?.()
-      const emit = makeEmit(ctx)
+      const emit = makeEmit(pi, ctx)
 
       const apiKey = requireApiKey(emit)
       if (!apiKey) return

@@ -88,7 +88,7 @@ pi -p "hello" --model kimi/k3.1-pro
 7-day  ██░░░░░░░░░░░░░░░░░░ 12% used · 88/100 remaining · resets 09-26
 ```
 
-字段缺失显示 `unavailable`，不伪造零值；月总额度上游不返回，不展示（订阅页可查）。TUI 使用即时通知展示结果，不进入主任务的 steering 队列，也不向 LLM 上下文写入用量消息。
+字段缺失显示 `unavailable`，不伪造零值；月总额度上游不返回，不展示（订阅页可查）。TUI 使用带 `customMessageBg` 主题背景色的持久卡片，通过 `appendEntry` 即时显示，不进入主任务的 steering 队列，也不写入 LLM 上下文；RPC 使用即时通知。
 
 ## 环境变量
 

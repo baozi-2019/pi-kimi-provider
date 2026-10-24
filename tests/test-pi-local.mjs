@@ -380,6 +380,42 @@ try {
     (event) => event.type === "response" && event.id === "abort-busy" && event.success,
   )
   await fourth.waitFor((event) => event.type === "agent_settled", abortEventIndex)
+
+  console.log("[pi-local] K2.8 think:off sends the Kimi-supported off effort")
+  fourth.send({
+    id: "set-adjustable-model",
+    type: "set_model",
+    provider: "kimi",
+    modelId: "kimi-for-coding",
+  })
+  const adjustableModelSet = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "set-adjustable-model",
+  )
+  assert.equal(adjustableModelSet.success, true)
+  fourth.send({ id: "set-thinking-off", type: "set_thinking_level", level: "off" })
+  const thinkingOffSet = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "set-thinking-off",
+  )
+  assert.equal(thinkingOffSet.success, true)
+
+  lastChatPayload = undefined
+  const previousOffRequestCount = chatRequestCount
+  fourth.send({ id: "off-prompt", type: "prompt", message: "inspect the off effort" })
+  const offPrompt = await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "off-prompt",
+  )
+  assert.equal(offPrompt.success, true)
+  await waitForCondition(
+    () => chatRequestCount === previousOffRequestCount + 1 && lastChatPayload !== undefined,
+  )
+  assert.equal(lastChatPayload.reasoning?.effort, "off")
+
+  const abortOffEventIndex = fourth.eventCount()
+  fourth.send({ id: "abort-off", type: "abort" })
+  await fourth.waitFor(
+    (event) => event.type === "response" && event.id === "abort-off" && event.success,
+  )
+  await fourth.waitFor((event) => event.type === "agent_settled", abortOffEventIndex)
   fourth.close()
 
   // -- No credential leaks anywhere ------------------------------------------
