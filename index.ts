@@ -58,7 +58,7 @@ function requireApiKey(emit: (text: string, kind: EmitKind) => void): string | u
   const apiKey = getKimiApiKey()
   if (!apiKey) {
     emit(
-      `Kimi API key not found. Run /login and select ${KIMI_PROVIDER}, or set ${KIMI_API_KEY_ENV}.`,
+      `Kimi API key not found. Run /login and select kimi, or set ${KIMI_API_KEY_ENV}.`,
       "warning",
     )
   }
@@ -80,7 +80,9 @@ export default function (pi: ExtensionAPI) {
   // -------------------------------------------------------------------------
 
   pi.registerProvider(KIMI_PROVIDER, {
-    name: "Kimi For Coding",
+    // Display name matches the provider id; the built-in kimi-coding provider
+    // owns "Kimi For Coding", so a distinct name avoids a duplicate /login entry.
+    name: "kimi",
     baseUrl: `${apiRoot()}${KIMI_CHAT_BASE_PATH}`,
     apiKey: `$${KIMI_API_KEY_ENV}`,
     authHeader: true,
@@ -88,7 +90,7 @@ export default function (pi: ExtensionAPI) {
     models: STATIC_KIMI_MODELS,
     refreshModels: refreshKimiModels,
     oauth: {
-      name: "Kimi Code (subscription)",
+      name: "kimi",
       isSubscription: true,
       async login(callbacks) {
         const token = await loginWithDeviceCode({

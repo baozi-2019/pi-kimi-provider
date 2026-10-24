@@ -12,7 +12,7 @@
 pi install git:github.com/baozi-2019/pi-kimi-provider
 ```
 
-启动或重载 pi 后执行 `/login`：选择 **kimi** → **Kimi Code (subscription)** 走浏览器设备码授权，或直接粘贴 API Key，然后用 `/model` 选择 `kimi/` 前缀的模型。
+启动或重载 pi 后执行 `/login`：选择 **kimi**（与内置 `kimi-coding` 的「Kimi For Coding」区分开）→ 设备码授权，或直接粘贴 API Key，然后用 `/model` 选择 `kimi/` 前缀的模型。
 
 更新与卸载：
 
