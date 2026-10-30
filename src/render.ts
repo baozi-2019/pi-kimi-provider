@@ -28,8 +28,6 @@ export interface KimiUsageSnapshot {
   sevenDay: KimiWindowUsage | null
 }
 
-export type ResetFormat = "clock" | "date"
-
 const BAR_WIDTH = 20
 const BAR_FILLED = "█"
 const BAR_EMPTY = "░"
@@ -137,18 +135,13 @@ function pad2(value: number): string {
   return String(value).padStart(2, "0")
 }
 
-/** Local-time reset label: HH:MM for the 5-hour window, MM-DD for weekly. */
-export function formatResetTime(resetAtMs: number, format: ResetFormat): string {
+/** Local-time reset label: yyyy-MM-dd HH:mm. */
+export function formatResetTime(resetAtMs: number): string {
   const date = new Date(resetAtMs)
-  if (format === "clock") return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
-  return `${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 }
 
-function windowLine(
-  label: string,
-  window: KimiWindowUsage | null,
-  resetFormat: ResetFormat,
-): string {
+function windowLine(label: string, window: KimiWindowUsage | null): string {
   const name = label.padEnd(6)
   if (!window || window.usedRatio === null) return `${name} unavailable`
 
@@ -158,15 +151,15 @@ function windowLine(
     line += ` · ${formatAmount(window.remaining)}/${formatAmount(window.limit)} remaining`
   }
   if (window.resetAt !== null) {
-    line += ` · resets ${formatResetTime(window.resetAt, resetFormat)}`
+    line += ` · resets ${formatResetTime(window.resetAt)}`
   }
   return line
 }
 
 export function renderUsageLines(snapshot: KimiUsageSnapshot): string[] {
-  const lines = [windowLine("5-hour", snapshot.fiveHour, "clock")]
+  const lines = [windowLine("5-hour", snapshot.fiveHour)]
   if (snapshot.sevenDay !== null) {
-    lines.push(windowLine("7-day", snapshot.sevenDay, "date"))
+    lines.push(windowLine("7-day", snapshot.sevenDay))
   }
   return lines
 }

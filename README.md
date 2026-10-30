@@ -84,8 +84,8 @@ pi -p "hello" --model kimi/k3.1-pro
 用量输出示例：
 
 ```text
-5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 12:22
-7-day  ██░░░░░░░░░░░░░░░░░░ 12% used · 88/100 remaining · resets 09-26
+5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 2026-09-26 12:22
+7-day  ██░░░░░░░░░░░░░░░░░░ 12% used · 88/100 remaining · resets 2026-10-01 09:00
 ```
 
 字段缺失显示 `unavailable`，不伪造零值；月总额度上游不返回，不展示（订阅页可查）。TUI 使用带 `customMessageBg` 主题背景色的持久卡片，通过 `appendEntry` 即时显示，不进入主任务的 steering 队列，也不写入 LLM 上下文；RPC 使用即时通知。

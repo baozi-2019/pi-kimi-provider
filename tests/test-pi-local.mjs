@@ -282,8 +282,14 @@ try {
 
   usageRequestCount = 0
   const full = await first.runCommand("usage-1", "/kimi-usage")
-  assert.match(full.message, /5-hour █+░+ 32% used · 68\/100 remaining · resets \d{2}:\d{2}/)
-  assert.match(full.message, /7-day\s+█+░+ 12% used · 88\/100 remaining · resets \d{2}-\d{2}/)
+  assert.match(
+    full.message,
+    /5-hour █+░+ 32% used · 68\/100 remaining · resets \d{4}-\d{2}-\d{2} \d{2}:\d{2}/,
+  )
+  assert.match(
+    full.message,
+    /7-day\s+█+░+ 12% used · 88\/100 remaining · resets \d{4}-\d{2}-\d{2} \d{2}:\d{2}/,
+  )
   assert.equal(lastAuthorization, `Bearer ${FAKE_KEY}`)
   assert.equal(usageRequestCount, 1)
 

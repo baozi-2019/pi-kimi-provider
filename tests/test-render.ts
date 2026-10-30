@@ -151,8 +151,8 @@ describe("renderUsageText", () => {
     const text = renderUsageText(parseKimiUsageResponse(FULL_RESPONSE))
     assert.equal(
       text,
-      "5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 12:22\n" +
-        "7-day  ██░░░░░░░░░░░░░░░░░░ 12% used · 88/100 remaining · resets 09-26",
+      "5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 2026-09-19 12:22\n" +
+        "7-day  ██░░░░░░░░░░░░░░░░░░ 12% used · 88/100 remaining · resets 2026-09-26 05:22",
     )
   })
 
@@ -163,7 +163,10 @@ describe("renderUsageText", () => {
     })
     const lines = renderUsageLines(snapshot)
     assert.equal(lines.length, 1)
-    assert.equal(lines[0], "5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 12:22")
+    assert.equal(
+      lines[0],
+      "5-hour ██████░░░░░░░░░░░░░░ 32% used · 68/100 remaining · resets 2026-09-19 12:22",
+    )
   })
 
   it("shows unavailable instead of fabricating a zero bar", () => {
@@ -207,9 +210,8 @@ describe("renderUsageText", () => {
 })
 
 describe("formatResetTime", () => {
-  it("formats clock style as HH:MM and date style as MM-DD (local time)", () => {
+  it("formats as yyyy-MM-dd HH:mm (local time)", () => {
     const at = Date.parse("2026-09-26T05:07:45Z")
-    assert.equal(formatResetTime(at, "clock"), "05:07")
-    assert.equal(formatResetTime(at, "date"), "09-26")
+    assert.equal(formatResetTime(at), "2026-09-26 05:07")
   })
 })
